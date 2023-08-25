@@ -28,9 +28,5 @@
     "typescript": "5.2.2",
     "valtio": "^1.11.2",
     "wouter": "^2.11.0"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^1.2.0",
-    "vite": "^2.8.6"
   }
 }
