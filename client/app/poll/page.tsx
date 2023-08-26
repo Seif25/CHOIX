@@ -113,7 +113,7 @@ const Poll = () => {
                 Five Guys
               </h3>
               <h3 className="text-[#565656] font-extrabold uppercase" key={2}>
-                Nando's
+                {"Nando's"}
               </h3>
               <h3 className="text-[#565656] font-extrabold uppercase" key={3}>
                 Sides
