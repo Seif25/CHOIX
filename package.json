@@ -1,11 +1,12 @@
 {
-    "name": "CHOIX",
+    "name": "choix",
     "version": "0.0.1",
     "description": "A web app that helps groups of people come to a consensus by voting",
     "main": "index.js",
     "workspaces": [
       "client",
-      "server"
+      "server",
+      "shared"
     ],
     "scripts": {
       "docker:compose": "docker-compose up -d",
