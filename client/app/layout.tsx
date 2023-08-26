@@ -36,7 +36,7 @@ export default function RootLayout({
           </nav>
           {children}
           <footer>
-            <h3 className="text-[#FAF774] font-extrabold text-xs">
+            <h3 className="text-[#FAF774] font-extrabold text-xs pb-5">
               CHOIX © 2023, All Rights Reserved
             </h3>
           </footer>
