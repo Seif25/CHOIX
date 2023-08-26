@@ -25,9 +25,9 @@ export class PollsController {
     async rejoinPoll() {
         const result = await this.pollsService.rejoinPoll(
             {
-                pollID: "123456",
-                voterID: "123456",
-                name: "John Doe",
+                pollID: "C70KUB",
+                voterID: "O6vE9Fq6XvzQy9Rq0EvRz",
+                name: "Yahia",
             }
         );
         Logger.log("Rejoining poll...")
