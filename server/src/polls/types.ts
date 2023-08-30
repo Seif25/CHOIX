@@ -1,3 +1,6 @@
+import { Request } from "express"
+import { Socket } from "socket.io";
+
 // Service Types
 export type CreatePollFields = {
     topic: string;
@@ -27,4 +30,14 @@ export type AddVoterData = {
     pollID: string;
     voterID: string;
     name: string;
+}   
+
+type AuthPayload = {
+    voterID: string;
+    pollID: string;
+    name: string;
 }
+
+
+export type RequestWithAuth = Request & AuthPayload
+export type SocketWithAuth = Socket & AuthPayload

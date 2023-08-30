@@ -7,9 +7,9 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Redis, RedisKey } from "ioredis";
-import { IO_REDIS_KEY } from "src/redis/redis.module";
 import { AddVoterData, CreatePollData } from "./types";
 import { Poll } from "shared";
+import { IO_REDIS_KEY } from "src/redis.module";
 
 @Injectable()
 export class PollsRepository {
@@ -83,21 +83,28 @@ export class PollsRepository {
     this.logger.log(`Adding voter with ID: ${voterID}-${name} to poll with ID: ${pollID}`);
 
     const key = `polls:${pollID}`;
-    const voterPath = `.voters.${voterID}`;
+    // const voterPath = `.voters.${voterID}`;
 
     try {
-        await this.redisClient.multi([['send_command', 'JSON.SET', key, voterPath, JSON.stringify(name)]]);
+        // await this.redisClient.multi([['send_command', 'JSON.SET', key, voterPath, JSON.stringify(name)]]);
 
         const pollJSON = await this.redisClient.get(key);
+        const pollParsed = JSON.parse(pollJSON) as Poll;
 
-        const poll = JSON.parse(pollJSON) as Poll;
+        if(pollJSON){
+          let voters = pollParsed.voters;
+          voters = {...voters, [voterID]: name};
+          pollParsed.voters = voters;
+        }
+
+        await this.redisClient.set(key, JSON.stringify(pollParsed), "KEEPTTL");
 
         this.logger.debug(
-            `current poll: ${JSON.stringify(poll, null, 2)}`,
-            poll.voters
+            `current poll: ${JSON.stringify(pollParsed, null, 2)}`,
+            pollParsed.voters
         )
 
-        return poll;
+        return pollParsed;
     } catch (e) {
         this.logger.error(`Error adding voter: ${voterID}-${name} to poll: ${pollID}`);
         throw e;

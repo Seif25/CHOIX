@@ -2,12 +2,13 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PollsController } from './polls.controller';
 import { PollsService } from './polls.service';
-import { redisModule } from 'src/modules.config';
+import { JWTModule, redisModule } from 'src/modules.config';
 import { PollsRepository } from './polls.repository';
+import { PollsGateway } from './polls.gateway';
 
 @Module({
-    imports: [ConfigModule.forRoot(), redisModule],
+    imports: [ConfigModule.forRoot(), redisModule, JWTModule],
     controllers: [PollsController],
-    providers: [PollsService, PollsRepository],
+    providers: [PollsService, PollsRepository, PollsGateway],
 })
 export class PollsModule {}
