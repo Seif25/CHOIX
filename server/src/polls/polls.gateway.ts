@@ -1,15 +1,28 @@
-import { Logger } from "@nestjs/common";
+import {
+  Logger,
+  UseFilters,
+  UseGuards,
+  UsePipes,
+  ValidationPipe,
+} from "@nestjs/common";
 import {
   OnGatewayInit,
   WebSocketGateway,
   OnGatewayConnection,
   OnGatewayDisconnect,
   WebSocketServer,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
 } from "@nestjs/websockets";
 import { PollsService } from "./polls.service";
 import { Namespace } from "socket.io";
-import { SocketWithAuth } from "./types";
+import { SocketWithAuth } from "./types/types";
+import { WSCatchAllFilter } from "src/exceptions/ws-catch-all.filter";
+import { GatewayAdminGuard } from "src/guards/gateway.guard";
 
+@UsePipes(new ValidationPipe())
+@UseFilters(new WSCatchAllFilter())
 @WebSocketGateway({
   namespace: "polls",
 })
@@ -25,25 +38,62 @@ export class PollsGateway
     this.logger.log("Websocket gateway initialized");
   }
 
-  handleConnection(client: SocketWithAuth) {
-    const sockets = this.io.sockets
+  async handleConnection(client: SocketWithAuth) {
+    const sockets = this.io.sockets;
 
     this.logger.debug(`
         Connected with voterID: ${client.voterID}, pollID: ${client.pollID}, and name: ${client.name}
-    `)
-    this.logger.log(`Client connected ${client.id}`);
-    this.logger.log(`Total connected clients, ${sockets.size }`);
-    // throw new Error("Method not implemented.");
+    `);
+    this.logger.log(`Total connected sockets, ${sockets.size}`);
+
+    const room = client.pollID;
+    await client.join(room);
+
+    const connectedClients = this.io.adapter.rooms?.get(room)?.size ?? 0;
+    this.logger.log(`Client ${client.voterID} joined room ${room}`);
+    this.logger.log(
+      `Total connected clients in room ${room} is ${connectedClients}`
+    );
+
+    const poll = await this.pollsService.addVoter({
+      pollID: client.pollID,
+      voterID: client.voterID,
+      name: client.name,
+    });
+
+    this.io.to(room).emit("poll_updated", poll);
   }
 
-  handleDisconnect(client: SocketWithAuth) {
-    const sockets = this.io.sockets
+  async handleDisconnect(client: SocketWithAuth) {
+    const poll = await this.pollsService.removeVoter(
+      client.pollID,
+      client.voterID
+    );
 
-    this.logger.debug(`
-        Disconnected with voterID: ${client.voterID}, pollID: ${client.pollID}, and name: ${client.name}
-    `)
-    this.logger.log(`Client disconnected ${client.id}`);
-    this.logger.log(`Total remaining clients, ${sockets.size }`);
-    // throw new Error("Method not implemented.");
+    const room = client.pollID;
+    const connectedClients = this.io.adapter.rooms?.get(room)?.size ?? 0;
+
+    this.logger.log(`Client ${client.voterID} left room ${room}`);
+    this.logger.debug(`Total connected clients in room ${room} is ${connectedClients}`);
+
+    if (poll) {
+      this.io.to(room).emit("poll_updated", poll);
+    }
+  }
+
+  @UseGuards(GatewayAdminGuard)
+  @SubscribeMessage("remove_voter")
+  async removeVoter(
+    @MessageBody("id") id: string,
+    @ConnectedSocket() client: SocketWithAuth
+  ) {
+    this.logger.debug(
+      `Removing voter with ID ${id} from poll with ID ${client.pollID}`
+    );
+    const poll = await this.pollsService.removeVoter(client.pollID, id);
+    
+    if (poll) {
+      this.io.to(client.pollID).emit("poll_updated", poll);
+    }
   }
 }

@@ -3,7 +3,8 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { IoAdapter } from "@nestjs/platform-socket.io";
 import { Server, ServerOptions } from "socket.io";
-import { SocketWithAuth } from "./polls/types";
+import { SocketWithAuth } from "../polls/types/types";
+import { createTokenMiddleware } from "../middleware/token.middleware";
 
 export class SocketIOAdapter extends IoAdapter{
     private readonly logger = new Logger(SocketIOAdapter.name);
@@ -40,21 +41,3 @@ export class SocketIOAdapter extends IoAdapter{
     }
 }
 
-const createTokenMiddleware = 
-(
-    jwtService: JwtService, logger: Logger
-) => (socket: SocketWithAuth, next) => {
-    const token = socket.handshake.auth.token || socket.handshake.headers['token'];
-
-    logger.log(`Validating auth token, ${token}`);
-
-    try {
-        const payload = jwtService.verify(token);
-        socket.voterID = payload.sub;
-        socket.pollID = payload.pollID;
-        socket.name = payload.name;
-        next();
-    } catch (e) {
-        next(new Error("Invalid auth token"))
-    }
-}

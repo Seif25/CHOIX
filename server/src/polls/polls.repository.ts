@@ -1,5 +1,5 @@
 import {
-    BadRequestException,
+  BadRequestException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -7,9 +7,9 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Redis, RedisKey } from "ioredis";
-import { AddVoterData, CreatePollData } from "./types";
+import { AddVoterData, CreatePollData } from "./types/types";
 import { Poll } from "shared";
-import { IO_REDIS_KEY } from "src/redis.module";
+import { IO_REDIS_KEY } from "src/db/redis.module";
 
 @Injectable()
 export class PollsRepository {
@@ -36,6 +36,7 @@ export class PollsRepository {
       votesPerVoter,
       voters: {},
       adminID: voterID,
+      votingStarted: false,
     };
 
     this.logger.log(
@@ -47,8 +48,13 @@ export class PollsRepository {
     const key: RedisKey = `polls:${pollID}`;
 
     try {
-      await this.redisClient.set(key, JSON.stringify(initialPoll), "EX", this.ttl);
-      
+      await this.redisClient.set(
+        key,
+        JSON.stringify(initialPoll),
+        "EX",
+        this.ttl
+      );
+
       return initialPoll;
     } catch (e) {
       this.logger.error(
@@ -67,47 +73,82 @@ export class PollsRepository {
       const currentPoll = await this.redisClient.get(key);
 
       this.logger.verbose(`Got poll: ${currentPoll}`);
-    
-    //   if(currentPoll?.hasStarted){
-    //     throw new BadRequestException('Poll has already started');
-    //   }
+
+      //   if(currentPoll?.hasStarted){
+      //     throw new BadRequestException('Poll has already started');
+      //   }
 
       return JSON.parse(currentPoll) as Poll;
     } catch (e) {
-        this.logger.error(`Error getting poll: ${e}`);
-        throw e;
+      this.logger.error(`Error getting poll: ${e}`);
+      throw e;
     }
   }
 
-  async addVoter({pollID, voterID, name}: AddVoterData): Promise<Poll> {
-    this.logger.log(`Adding voter with ID: ${voterID}-${name} to poll with ID: ${pollID}`);
+  async addVoter({ pollID, voterID, name }: AddVoterData): Promise<Poll> {
+    this.logger.log(
+      `Adding voter with ID: ${voterID}-${name} to poll with ID: ${pollID}`
+    );
 
     const key = `polls:${pollID}`;
     // const voterPath = `.voters.${voterID}`;
 
     try {
-        // await this.redisClient.multi([['send_command', 'JSON.SET', key, voterPath, JSON.stringify(name)]]);
+      // await this.redisClient.multi([['send_command', 'JSON.SET', key, voterPath, JSON.stringify(name)]]);
 
-        const pollJSON = await this.redisClient.get(key);
-        const pollParsed = JSON.parse(pollJSON) as Poll;
+      const poll = await this.getPoll(pollID);
 
-        if(pollJSON){
-          let voters = pollParsed.voters;
-          voters = {...voters, [voterID]: name};
-          pollParsed.voters = voters;
-        }
+      if (poll) {
+        let voters = poll.voters;
+        voters = { ...voters, [voterID]: name };
+        poll.voters = voters;
+      }
 
-        await this.redisClient.set(key, JSON.stringify(pollParsed), "KEEPTTL");
+      await this.redisClient.set(key, JSON.stringify(poll), "KEEPTTL");
 
-        this.logger.debug(
-            `current poll: ${JSON.stringify(pollParsed, null, 2)}`,
-            pollParsed.voters
-        )
+      this.logger.debug(
+        `current poll: ${JSON.stringify(poll, null, 2)}`,
+        poll.voters
+      );
 
-        return pollParsed;
+      return poll;
     } catch (e) {
-        this.logger.error(`Error adding voter: ${voterID}-${name} to poll: ${pollID}`);
-        throw e;
+      this.logger.error(
+        `Error adding voter: ${voterID}-${name} to poll: ${pollID}`
+      );
+      throw e;
+    }
+  }
+
+  async removeVoter(pollID: string, voterID: string): Promise<Poll> {
+    this.logger.log(
+      `Removing voter with ID: ${voterID} from poll with ID: ${pollID}`
+    );
+
+    const key = `polls:${pollID}`;
+
+    try {
+      const poll = await this.getPoll(pollID);
+
+      if (poll) {
+        let voters = poll.voters;
+        delete voters[voterID];
+        poll.voters = voters;
+      }
+
+      await this.redisClient.set(key, JSON.stringify(poll), "KEEPTTL");
+
+      this.logger.debug(
+        `current poll: ${JSON.stringify(poll, null, 2)}`,
+        poll.voters
+      );
+
+      return poll;
+    } catch (e) {
+      this.logger.error(
+        `Error removing voter: ${voterID} from poll: ${pollID}`
+      );
+      throw e;
     }
   }
 }

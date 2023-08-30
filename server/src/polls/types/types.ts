@@ -18,6 +18,18 @@ export type RejoinPollFields = {
     voterID: string;
     name: string;
 }
+
+export type AddVoterFields = {
+    pollID: string;
+    voterID: string;
+    name: string;
+}
+
+export type RemoveVoterFields = {
+    voterID: string;
+    pollID: string;
+}
+
 // Repository Types
 export type CreatePollData = {
     pollID: string;
@@ -32,7 +44,7 @@ export type AddVoterData = {
     name: string;
 }   
 
-type AuthPayload = {
+export type AuthPayload = {
     voterID: string;
     pollID: string;
     name: string;

@@ -1,8 +1,15 @@
 import { JwtService } from "@nestjs/jwt/dist";
 import { Injectable, Logger } from "@nestjs/common";
-import { CreatePollFields, JoinPollFields, RejoinPollFields } from "./types";
+import {
+  AddVoterFields,
+  CreatePollFields,
+  JoinPollFields,
+  RejoinPollFields,
+  RemoveVoterFields,
+} from "./types/types";
 import { PollsRepository } from "./polls.repository";
-import { createPollID, createVoterID } from "src/utils/id_generator";
+import { createPollID, createVoterID } from "src/utils/id-generator";
+import { Poll } from "shared";
 
 @Injectable()
 export class PollsService {
@@ -11,6 +18,7 @@ export class PollsService {
     private readonly pollsRepository: PollsRepository,
     private readonly jwtService: JwtService
   ) {}
+
   async createPoll(fields: CreatePollFields) {
     const pollID = createPollID();
     const voterID = createVoterID();
@@ -36,10 +44,11 @@ export class PollsService {
     );
 
     return {
-        poll: createPoll,
-        accessToken: signedToken,
-    }
+      poll: createPoll,
+      accessToken: signedToken,
+    };
   }
+
   async joinPoll(fields: JoinPollFields) {
     const voterID = createVoterID();
 
@@ -50,25 +59,26 @@ export class PollsService {
     const joinPoll = await this.pollsRepository.getPoll(fields.pollID);
 
     this.logger.debug(
-        `Creating token for poll with ID ${fields.pollID} and voter with ID ${voterID}`
-    )
+      `Creating token for poll with ID ${fields.pollID} and voter with ID ${voterID}`
+    );
 
     const signedToken = this.jwtService.sign(
-        {
-            pollID: joinPoll.id,
-            name: fields.name,
-            voterID,
-        },
-        {
-            subject: voterID,
-        }
-    )
+      {
+        pollID: joinPoll.id,
+        name: fields.name,
+        voterID,
+      },
+      {
+        subject: voterID,
+      }
+    );
 
     return {
       poll: joinPoll,
-      accessToken: signedToken
+      accessToken: signedToken,
     };
   }
+
   async rejoinPoll(fields: RejoinPollFields) {
     this.logger.debug(
       `Rejoining poll with ID ${fields.pollID} as voter with ID ${fields.voterID} and name ${fields.name}`
@@ -77,5 +87,23 @@ export class PollsService {
     const joinPoll = await this.pollsRepository.addVoter(fields);
 
     return joinPoll;
+  }
+
+  async getPoll(pollID: string): Promise<Poll> {
+    return this.pollsRepository.getPoll(pollID);
+  }
+
+  async addVoter(fields: AddVoterFields): Promise<Poll> {
+    return this.pollsRepository.addVoter(fields);
+  }
+
+  async removeVoter(pollID: string, voterID: string): Promise<Poll | void> {
+    const poll = await this.pollsRepository.getPoll(pollID);
+
+    if(!poll.votingStarted){
+      const updatedPoll = await this.pollsRepository.removeVoter(pollID, voterID);
+      return updatedPoll;
+    }
+    
   }
 }

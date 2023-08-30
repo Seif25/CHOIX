@@ -1,6 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException, Logger } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import { RequestWithAuth } from "./types";
+import { RequestWithAuth } from "../polls/types/types";
 
 @Injectable()
 export class ControllerAuthGuard implements CanActivate {
@@ -24,7 +24,5 @@ export class ControllerAuthGuard implements CanActivate {
         } catch {
             throw new ForbiddenException("Invalid access token");
         }
-
-        return false
     }
 }

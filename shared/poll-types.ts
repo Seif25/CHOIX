@@ -8,4 +8,5 @@ export interface Poll {
     votesPerVoter: number;
     voters: Voters;
     adminID: string;
+    votingStarted: boolean;
 }

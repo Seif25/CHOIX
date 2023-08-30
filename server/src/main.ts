@@ -2,7 +2,7 @@ import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { SocketIOAdapter } from "./socket.io.adapter";
+import { SocketIOAdapter } from "./adapter/socket.io.adapter";
 
 async function bootstrap() {
   const logger = new Logger("Main (main.ts)");
