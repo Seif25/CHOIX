@@ -7,13 +7,12 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Redis, RedisKey } from "ioredis";
-import { AddVoterData, CreatePollData } from "./types/types";
-import { Poll } from "shared";
+import { AddRankingData, AddSuggestionData, AddVoterData, CreatePollData } from "./types/types";
+import { Poll, Results } from "shared";
 import { IO_REDIS_KEY } from "src/db/redis.module";
 
 @Injectable()
 export class PollsRepository {
-  // to use time to live
   private readonly ttl: string;
   private readonly logger = new Logger(PollsRepository.name);
 
@@ -37,6 +36,10 @@ export class PollsRepository {
       voters: {},
       adminID: voterID,
       votingStarted: false,
+      suggestions: {},
+      rankings: {},
+      results: [],
+      ended: false
     };
 
     this.logger.log(
@@ -74,14 +77,10 @@ export class PollsRepository {
 
       this.logger.verbose(`Got poll: ${currentPoll}`);
 
-      //   if(currentPoll?.hasStarted){
-      //     throw new BadRequestException('Poll has already started');
-      //   }
-
       return JSON.parse(currentPoll) as Poll;
     } catch (e) {
       this.logger.error(`Error getting poll: ${e}`);
-      throw e;
+      throw new InternalServerErrorException(``);
     }
   }
 
@@ -91,11 +90,8 @@ export class PollsRepository {
     );
 
     const key = `polls:${pollID}`;
-    // const voterPath = `.voters.${voterID}`;
 
     try {
-      // await this.redisClient.multi([['send_command', 'JSON.SET', key, voterPath, JSON.stringify(name)]]);
-
       const poll = await this.getPoll(pollID);
 
       if (poll) {
@@ -116,7 +112,7 @@ export class PollsRepository {
       this.logger.error(
         `Error adding voter: ${voterID}-${name} to poll: ${pollID}`
       );
-      throw e;
+      throw new InternalServerErrorException(`Error adding voter: ${voterID}-${name} to poll: ${pollID}`);
     }
   }
 
@@ -148,7 +144,151 @@ export class PollsRepository {
       this.logger.error(
         `Error removing voter: ${voterID} from poll: ${pollID}`
       );
-      throw e;
+      throw new InternalServerErrorException(`Error removing voter: ${voterID} from poll: ${pollID}`);
+    }
+  }
+
+  async addSuggestion({
+    pollID,
+    suggestionID,
+    suggestion,
+  }: AddSuggestionData): Promise<Poll> {
+    this.logger.log(
+      `Adding suggestion with ID: ${suggestionID} to poll with ID: ${pollID}`
+    )
+
+    const key = `polls:${pollID}`;
+
+    try {
+      const poll = await this.getPoll(pollID);
+      
+      if (poll) {
+        let suggestions = poll.suggestions;
+        suggestions = { ...suggestions, [suggestionID]: suggestion };
+        poll.suggestions = suggestions;
+      }
+
+      await this.redisClient.set(key, JSON.stringify(poll), "KEEPTTL");
+
+      this.logger.log(
+        `Added suggestion with ID: ${suggestionID} to poll with ID: ${pollID}`
+      )
+
+      return poll;
+    } catch (error) {
+      this.logger.error(`Error adding suggestion: ${suggestionID} to poll: ${pollID}`)
+      throw new InternalServerErrorException(`Error adding suggestion: ${suggestionID} to poll: ${pollID}`)
+    }
+  }
+
+  async removeSuggestion(pollID: string, suggestionID: string): Promise<Poll> {
+    this.logger.log(`Removing suggestion with ID: ${suggestionID} from poll with ID: ${pollID}`)
+
+    const key = `polls:${pollID}`;
+
+    try {
+      const poll = await this.getPoll(pollID);
+
+      if (poll) {
+        let suggestions = poll.suggestions;
+        delete suggestions[suggestionID];
+        poll.suggestions = suggestions;
+      }
+
+      await this.redisClient.set(key, JSON.stringify(poll), "KEEPTTL");
+
+      this.logger.log(`Removed suggestion with ID: ${suggestionID} from poll with ID: ${pollID}`)
+
+      return poll;
+    } catch (error) {
+      this.logger.error(`Error removing suggestion: ${suggestionID} from poll: ${pollID}`)
+      throw new InternalServerErrorException(`Error removing suggestion: ${suggestionID} from poll: ${pollID}`)
+    }
+  }
+
+  async startVoting(pollID: string): Promise<Poll> {
+    this.logger.log(`Starting poll with ID: ${pollID}`)
+
+    const key = `polls:${pollID}`;
+
+    try {
+      const poll = await this.getPoll(pollID);
+
+      if (poll) {
+        poll.votingStarted = true;
+
+        await this.redisClient.set(key, JSON.stringify(poll), "KEEPTTL");
+
+        this.logger.log(`Started poll with ID: ${pollID}`)
+
+        return poll;
+      }
+    } catch (error) {
+      this.logger.error(`Error starting poll: ${pollID}`)
+      throw new InternalServerErrorException(`Error starting poll: ${pollID}`)
+    }
+  }
+
+  async addRanking({pollID, voterID, rankings}: AddRankingData): Promise<Poll> {
+    this.logger.log(`Adding ranking for voter with ID: ${voterID} to poll with ID: ${pollID}`)
+
+    const key = `polls:${pollID}`;
+
+    try {
+      const poll = await this.getPoll(pollID);
+
+      if (poll) {
+        let updated_rankings = poll.rankings;
+        updated_rankings = { ...updated_rankings, [voterID]: rankings };
+        poll.rankings = updated_rankings;
+
+        await this.redisClient.set(key, JSON.stringify(poll), "KEEPTTL");
+
+        this.logger.log(`Added ranking for voter with ID: ${voterID} to poll with ID: ${pollID}`)
+
+        return poll;
+      }
+    } catch (error) {
+      this.logger.error(`Error adding ranking for voter with ID: ${voterID} to poll with ID: ${pollID}`)
+      throw new InternalServerErrorException(`Error adding ranking for voter with ID: ${voterID} to poll with ID: ${pollID}`)
+    }
+  }
+
+  async addResults(pollID: string, results: Results): Promise<Poll>{
+    this.logger.log(`Adding results to poll with ID: ${pollID}`)
+
+    const key = `polls:${pollID}`;
+
+    try {
+      const poll = await this.getPoll(pollID);
+
+      if (poll) {
+        poll.results = results;
+        poll.ended = true;
+
+        await this.redisClient.set(key, JSON.stringify(poll), "KEEPTTL");
+
+        this.logger.log(`Added results to poll with ID: ${pollID}`)
+
+        return poll;
+      }
+    } catch (error) {
+      this.logger.error(`Error adding results to poll with ID: ${pollID}`)
+      this.logger.error(error)
+      throw new InternalServerErrorException(`Error adding results to poll with ID: ${pollID}`)
+    }
+  }
+
+  async deletePoll(pollID: string): Promise<void> {
+    this.logger.log(`Deleting poll with ID: ${pollID}`)
+
+    const key = `polls:${pollID}`;
+
+    try {
+      await this.redisClient.del([key]);
+    } catch (error) {
+      this.logger.error(`Error deleting poll with ID: ${pollID}`)
+      throw new InternalServerErrorException(`Error deleting poll with ID: ${pollID}`)
     }
   }
 }

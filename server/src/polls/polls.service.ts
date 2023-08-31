@@ -1,15 +1,18 @@
 import { JwtService } from "@nestjs/jwt/dist";
-import { Injectable, Logger } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import {
+  AddSuggestionFields,
   AddVoterFields,
   CreatePollFields,
   JoinPollFields,
   RejoinPollFields,
   RemoveVoterFields,
+  SubmitRankingsFields,
 } from "./types/types";
 import { PollsRepository } from "./polls.repository";
-import { createPollID, createVoterID } from "src/utils/id-generator";
+import { createPollID, createSuggestionID, createVoterID } from "src/utils/id-generator";
 import { Poll } from "shared";
+import getResults from "./getResults";
 
 @Injectable()
 export class PollsService {
@@ -100,10 +103,66 @@ export class PollsService {
   async removeVoter(pollID: string, voterID: string): Promise<Poll | void> {
     const poll = await this.pollsRepository.getPoll(pollID);
 
-    if(!poll.votingStarted){
-      const updatedPoll = await this.pollsRepository.removeVoter(pollID, voterID);
+    if (!poll.votingStarted) {
+      const updatedPoll = await this.pollsRepository.removeVoter(
+        pollID,
+        voterID
+      );
       return updatedPoll;
     }
-    
+  }
+
+  async addSuggestion({pollID, voterID, text}: AddSuggestionFields): Promise<Poll> {
+    const poll = await this.pollsRepository.getPoll(pollID)
+
+    if (poll.votingStarted) {
+      throw new BadRequestException("Voting has already started")
+    }
+
+    return this.pollsRepository.addSuggestion(
+      {
+        pollID,
+        suggestionID: createSuggestionID(),
+        suggestion: {
+          voterID,
+          text
+        }
+      }
+    )
+  }
+
+  async removeSuggestion(pollID: string, suggestionID: string): Promise<Poll> {
+    return this.pollsRepository.removeSuggestion(pollID, suggestionID)
+  }
+
+  async startVoting(pollID: string): Promise<Poll> {
+    return this.pollsRepository.startVoting(pollID)
+  }
+
+  async submitRankings({pollID, voterID, rankings}: SubmitRankingsFields): Promise<Poll> {
+    const poll = await this.pollsRepository.getPoll(pollID)
+
+    if (!poll.votingStarted) {
+      throw new BadRequestException("Voting has not started yet")
+    }
+
+    return this.pollsRepository.addRanking({pollID, voterID, rankings})
+  }
+
+  async computeResults(pollID: string): Promise<Poll> {
+    const poll = await this.pollsRepository.getPoll(pollID)
+
+    const results = getResults(poll.rankings, poll.suggestions, poll.votesPerVoter)
+
+    this.logger.verbose(`Computed results for poll with ID ${pollID}: ${JSON.stringify(results, null ,2)}`)
+
+    return this.pollsRepository.addResults(
+      pollID,
+      results
+    )
+  }
+
+  async deletePoll(pollID: string): Promise<void> {
+    return this.pollsRepository.deletePoll(pollID)
   }
 }

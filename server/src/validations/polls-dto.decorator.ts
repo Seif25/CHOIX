@@ -24,3 +24,9 @@ export class JoinPollDto {
     @Length(6, 6)
     pollID: string;
 }
+
+export class SuggestionDto {
+    @IsString()
+    @Length(1, 100)
+    text: string;
+}

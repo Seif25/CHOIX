@@ -6,4 +6,4 @@ export const createPollID = customAlphabet(
 )
 
 export const createVoterID = () => nanoid();
-export const createNominationID = () => nanoid(8);
+export const createSuggestionID = () => nanoid(8);

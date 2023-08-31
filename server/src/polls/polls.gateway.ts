@@ -20,6 +20,7 @@ import { Namespace } from "socket.io";
 import { SocketWithAuth } from "./types/types";
 import { WSCatchAllFilter } from "src/exceptions/ws-catch-all.filter";
 import { GatewayAdminGuard } from "src/guards/gateway.guard";
+import { SuggestionDto } from "src/validations/polls-dto.decorator";
 
 @UsePipes(new ValidationPipe())
 @UseFilters(new WSCatchAllFilter())
@@ -74,7 +75,9 @@ export class PollsGateway
     const connectedClients = this.io.adapter.rooms?.get(room)?.size ?? 0;
 
     this.logger.log(`Client ${client.voterID} left room ${room}`);
-    this.logger.debug(`Total connected clients in room ${room} is ${connectedClients}`);
+    this.logger.debug(
+      `Total connected clients in room ${room} is ${connectedClients}`
+    );
 
     if (poll) {
       this.io.to(room).emit("poll_updated", poll);
@@ -91,9 +94,88 @@ export class PollsGateway
       `Removing voter with ID ${id} from poll with ID ${client.pollID}`
     );
     const poll = await this.pollsService.removeVoter(client.pollID, id);
-    
+
     if (poll) {
       this.io.to(client.pollID).emit("poll_updated", poll);
     }
+  }
+
+  @SubscribeMessage("add_suggestion")
+  async addSuggestion(
+    @MessageBody() suggestion: SuggestionDto,
+    @ConnectedSocket() client: SocketWithAuth
+  ): Promise<void> {
+    this.logger.debug(
+      `Adding suggestion with text ${suggestion.text} to poll with ID ${client.pollID}`
+    );
+
+    const poll = await this.pollsService.addSuggestion({
+      pollID: client.pollID,
+      voterID: client.voterID,
+      text: suggestion.text,
+    });
+
+    this.io.to(client.pollID).emit("poll_updated", poll);
+  }
+
+  @UseGuards(GatewayAdminGuard)
+  @SubscribeMessage("remove_suggestion")
+  async removeSuggestion(
+    @MessageBody("id") id: string,
+    @ConnectedSocket() client: SocketWithAuth
+  ): Promise<void> {
+    this.logger.debug(
+      `Removing suggestion with ID ${id} from poll with ID ${client.pollID}`
+    );
+
+    const poll = await this.pollsService.removeSuggestion(client.pollID, id);
+
+    this.io.to(client.pollID).emit("poll_updated", poll);
+  }
+
+  @UseGuards(GatewayAdminGuard)
+  @SubscribeMessage("start_vote")
+  async startVoting(@ConnectedSocket() client: SocketWithAuth): Promise<void> {
+    this.logger.debug(`Starting voting for poll with ID ${client.pollID}`);
+
+    const poll = await this.pollsService.startVoting(client.pollID);
+
+    this.io.to(client.pollID).emit("poll_updated", poll);
+  }
+
+  @SubscribeMessage("submit_rankings")
+  async submitRankings(
+    @MessageBody("rankings") rankings: string[],
+    @ConnectedSocket() client: SocketWithAuth
+  ): Promise<void> {
+    this.logger.debug(`Submitting rankings for poll with ID ${client.pollID}`);
+
+    await this.pollsService.submitRankings(
+      {
+        pollID: client.pollID,
+        voterID: client.voterID,
+        rankings,
+      }
+    )
+  }
+
+  @UseGuards(GatewayAdminGuard)
+  @SubscribeMessage("end_poll")
+  async endPoll(@ConnectedSocket() client: SocketWithAuth): Promise<void> {
+    this.logger.debug(`Ending poll with ID ${client.pollID}`);
+
+    const poll = await this.pollsService.computeResults(client.pollID);
+
+    this.io.to(client.pollID).emit("poll_updated", poll);
+  }
+
+  @UseGuards(GatewayAdminGuard)
+  @SubscribeMessage("delete_poll")
+  async deletePoll(@ConnectedSocket() client: SocketWithAuth): Promise<void> {
+    this.logger.debug(`Deleting poll with ID ${client.pollID}`);
+
+    await this.pollsService.deletePoll(client.pollID);
+
+    this.io.to(client.pollID).emit("poll_deleted");
   }
 }
