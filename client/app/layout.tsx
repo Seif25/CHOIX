@@ -27,7 +27,7 @@ export default function RootLayout({
           <nav className="flex items-center justify-center">
             <Link href="/">
               <Image
-                src="/CHOIX_logo.png"
+                src="/1_r.png"
                 alt="CHOIX"
                 width={200}
                 height={200}
